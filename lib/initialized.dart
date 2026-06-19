@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:media_kit/media_kit.dart';
 import 'common/utils/hive_pref_util.dart';
 import 'package:pure_live/common/index.dart';
 import 'package:pure_live/plugins/db_service.dart';

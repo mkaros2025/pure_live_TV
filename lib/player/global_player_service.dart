@@ -34,8 +34,6 @@ class GlobalPlayerService {
             return MediaKitAdapter();
           case PlayerEngine.fijk:
             return FijkAdapter();
-          case PlayerEngine.videoPlayer:
-            throw UnsupportedError('videoPlayer engine not available on without-exo branch');
         }
       },
     );
