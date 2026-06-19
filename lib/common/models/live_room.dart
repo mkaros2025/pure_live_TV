@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:pure_live/app/app_focus_node.dart';
 
 enum LiveStatus { live, offline, replay, unknown, banned }
@@ -25,8 +26,10 @@ class LiveRoom {
   /// 状态
   bool? status;
 
+  /// 运行时数据（不序列化）
   dynamic data;
 
+  /// 弹幕连接数据（不序列化）
   dynamic danmakuData;
 
   /// 是否录播
@@ -105,6 +108,7 @@ class LiveRoom {
   Map<String, dynamic> toJson() => <String, dynamic>{
     'roomId': roomId,
     'userId': userId,
+    'link': link,
     'title': title,
     'nick': nick,
     'avatar': avatar,
@@ -126,6 +130,19 @@ class LiveRoom {
     'catchUpStart': catchUpStart,
     'catchUpEnd': catchUpEnd,
   };
+
+  /// 安全解析 JSON 字符串列表，跳过损坏的数据
+  static List<LiveRoom> safeFromJsonList(List<String> jsonStrings) {
+    final result = <LiveRoom>[];
+    for (final s in jsonStrings) {
+      try {
+        result.add(LiveRoom.fromJson(jsonDecode(s)));
+      } catch (_) {
+        // 跳过损坏的数据
+      }
+    }
+    return result;
+  }
 
   /// 创建一个新的LiveRoom实例，并用提供的值更新指定字段
   LiveRoom copyWith({

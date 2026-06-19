@@ -84,9 +84,9 @@ class SettingsService extends GetxController {
 
   // 收藏与历史相关
   final favoriteRooms =
-      ((HivePrefUtil.getStringList('favoriteRooms') ?? []).map((e) => LiveRoom.fromJson(jsonDecode(e))).toList()).obs;
+      (LiveRoom.safeFromJsonList(HivePrefUtil.getStringList('favoriteRooms') ?? [])).obs;
   final historyRooms =
-      ((HivePrefUtil.getStringList('historyRooms') ?? []).map((e) => LiveRoom.fromJson(jsonDecode(e))).toList()).obs;
+      (LiveRoom.safeFromJsonList(HivePrefUtil.getStringList('historyRooms') ?? [])).obs;
   final favoriteAreas =
       ((HivePrefUtil.getStringList('favoriteAreas') ?? []).map((e) => LiveArea.fromJson(jsonDecode(e))).toList()).obs;
 
