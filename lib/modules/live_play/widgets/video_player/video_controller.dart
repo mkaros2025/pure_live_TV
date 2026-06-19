@@ -68,6 +68,7 @@ class VideoController with ChangeNotifier {
   Timer? showChangeNameTimer;
   Timer? doubleClickTimer;
   late ScrollController scrollController;
+  final List<StreamSubscription> _subscriptions = [];
   StreamSubscription<PlayerException>? _errorSub;
 
   // ==================== 焦点管理 ====================
@@ -166,74 +167,39 @@ class VideoController with ChangeNotifier {
 
   /// 初始化事件监听
   void _initListeners() {
-    // 控制器显示状态监听
-    showController.listen((show) {
+    _subscriptions.add(showController.listen((show) {
       if (show) showChangeNameFlag.value = false;
-    });
-
-    // 画质面板监听
-    showQualityPanel.listen((show) {
+    }));
+    _subscriptions.add(showQualityPanel.listen((show) {
+      if (show) { hideAllPanelsExcept(PanelType.quality); } else { disableController(); }
+    }));
+    _subscriptions.add(showLinePanel.listen((show) {
+      if (show) { hideAllPanelsExcept(PanelType.lines); } else { disableController(); }
+    }));
+    _subscriptions.add(showQrCodePanel.listen((show) {
+      if (show) { hideAllPanelsExcept(PanelType.qrCode); } else { disableController(); }
+    }));
+    _subscriptions.add(showSettting.listen((show) {
+      if (show) { hideAllPanelsExcept(PanelType.settings); } else { disableController(); }
+    }));
+    _subscriptions.add(showPlayListPanel.listen((show) {
       if (show) {
-        // 直接调用扩展方法
-        hideAllPanelsExcept(PanelType.quality);
-      } else {
-        disableController();
-      }
-    });
-    showLinePanel.listen((show) {
-      if (show) {
-        // 直接调用扩展方法
-        hideAllPanelsExcept(PanelType.lines);
-      } else {
-        disableController();
-      }
-    });
-
-    showQrCodePanel.listen((show) {
-      if (show) {
-        hideAllPanelsExcept(PanelType.qrCode);
-      } else {
-        disableController();
-      }
-    });
-
-    // 设置面板监听
-    showSettting.listen((show) {
-      if (show) {
-        // 直接调用扩展方法
-        hideAllPanelsExcept(PanelType.settings);
-      } else {
-        disableController();
-      }
-    });
-
-    // 播放列表面板监听
-    showPlayListPanel.listen((show) {
-      if (show) {
-        // 直接调用扩展方法
         hideAllPanelsExcept(PanelType.playlist);
         scrollToIndex(beforePlayNodeIndex.value);
       } else {
         beforePlayNodeIndex.value = settings.currentPlayListNodeIndex.value;
         disableController();
       }
-    });
-
-    // 播放列表索引监听
-    beforePlayNodeIndex.listen((index) {
+    }));
+    _subscriptions.add(beforePlayNodeIndex.listen((index) {
       if (showPlayListPanel.value) scrollToIndex(index);
-    });
-
-    // 底部按钮索引监听
-    currentNodeIndex.listen((index) {
+    }));
+    _subscriptions.add(currentNodeIndex.listen((index) {
       currentBottomClickType.value = BottomButtonClickType.values[index];
-      log("currentBottomClickType: ${currentBottomClickType.value.toString()}");
-    });
-
-    // 弹幕设置索引监听
-    danmukuNodeIndex.listen((index) {
+    }));
+    _subscriptions.add(danmukuNodeIndex.listen((index) {
       currentDanmakuClickType.value = DanmakuSettingClickType.values[index];
-    });
+    }));
   }
 
   /// 初始化播放器
@@ -755,16 +721,19 @@ class VideoController with ChangeNotifier {
   // ==================== 资源释放 ====================
   /// 销毁控制器资源
   Future<void> destroy() async {
-    // 取消焦点
     cancelFocus();
     cancelDanmakuFocus();
     stopServer();
     livePlayController.liveDanmaku.stop();
-    // 重置播放状态
     livePlayController.success.value = false;
 
-    // 取消订阅
+    // 取消所有订阅
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
     await _errorSub?.cancel();
+
     // 停止播放器
     GlobalPlayerService.instance.playerManager.close();
 
@@ -777,10 +746,9 @@ class VideoController with ChangeNotifier {
     scrollController.dispose();
   }
 
-  /// 生命周期释放
   @override
-  void dispose() async {
-    await destroy();
+  void dispose() {
+    destroy();
     super.dispose();
   }
 }

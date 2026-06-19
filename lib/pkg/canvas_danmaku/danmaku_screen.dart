@@ -112,6 +112,10 @@ class _DanmakuScreenState extends State<DanmakuScreen> with TickerProviderStateM
     _animationController.dispose();
     _staticAnimationController.dispose();
     _stopwatch.stop();
+    _scrollDanmakuByTrack.clear();
+    _topDanmakuItems.clear();
+    _bottomDanmakuItems.clear();
+    _specialDanmakuItems.clear();
     _flattenedScrollDanmakus.clear();
     super.dispose();
   }
