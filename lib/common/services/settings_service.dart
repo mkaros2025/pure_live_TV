@@ -281,22 +281,22 @@ class SettingsService extends GetxController {
       _debounceWrite('hotAreasList', () => HivePrefUtil.setStringList('hotAreasList', value));
     }));
     _directFieldSubscriptions.add(favoriteRooms.listen((rooms) {
-      _debounceWrite('favoriteRooms', () => HivePrefUtil.setStringList(
+      HivePrefUtil.setStringList(
         'favoriteRooms',
         favoriteRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
-      ));
+      );
     }));
     _directFieldSubscriptions.add(favoriteAreas.listen((rooms) {
-      _debounceWrite('favoriteAreas', () => HivePrefUtil.setStringList(
+      HivePrefUtil.setStringList(
         'favoriteAreas',
         favoriteAreas.map<String>((e) => jsonEncode(e.toJson())).toList(),
-      ));
+      );
     }));
     _directFieldSubscriptions.add(historyRooms.listen((rooms) {
-      _debounceWrite('historyRooms', () => HivePrefUtil.setStringList(
+      HivePrefUtil.setStringList(
         'historyRooms',
         historyRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
-      ));
+      );
     }));
     _directFieldSubscriptions.add(currentBoxImage.listen((value) {
       HivePrefUtil.setString('currentBoxImage', value);
