@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
-import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:pure_live/common/index.dart';
@@ -11,6 +11,7 @@ import 'package:pure_live/common/consts/app_consts.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:pure_live/player/utils/player_consts.dart';
 import 'package:pure_live/common/utils/hive_pref_util.dart';
+import 'package:pure_live/common/utils/app_path_manager.dart';
 import 'package:pure_live/core/iptv/services/auto_sync_scheduler.dart';
 import 'package:pure_live/common/services/bilibili_account_service.dart';
 
@@ -40,7 +41,7 @@ class SettingsService extends GetxController {
   final enableScreenKeepOn = (HivePrefUtil.getBool('enableScreenKeepOn') ?? true).obs;
   final enableAutoCheckUpdate = (HivePrefUtil.getBool('enableAutoCheckUpdate') ?? true).obs;
   final enableFullScreenDefault = (HivePrefUtil.getBool('enableFullScreenDefault') ?? false).obs;
-  final maxConcurrentRefresh = (HivePrefUtil.getInt('maxConcurrentRefresh') ?? 5).obs;
+  final maxConcurrentRefresh = (HivePrefUtil.getInt('maxConcurrentRefresh') ?? 3).obs;
   final autoRefreshFavorite = (HivePrefUtil.getBool('autoRefreshFavorite') ?? true).obs;
   final autoRefreshInterval = (HivePrefUtil.getInt('autoRefreshInterval') ?? 10).obs;
   final isFirstInApp = (HivePrefUtil.getBool('isFirstInApp') ?? true).obs;
@@ -106,8 +107,8 @@ class SettingsService extends GetxController {
   final isAutoSyncEnabled = (HivePrefUtil.getBool('isAutoSyncEnabled') ?? false).obs;
   final autoSyncHoursInterval = (HivePrefUtil.getInt('autoSyncHoursInterval') ?? 24).obs;
   final customIptvUserAgent = (HivePrefUtil.getString('customIptvUserAgent') ?? '').obs;
-  Uint8List? _cachedBytes;
-  String? _cachedBase64;
+  String? _cachedImagePath;
+  FileImage? _cachedFileImage;
 
   // Web与网络相关
   final webPort = (HivePrefUtil.getString('webPort') ?? "9527").obs;
@@ -140,6 +141,18 @@ class SettingsService extends GetxController {
   final backupDirectory = (HivePrefUtil.getString('backupDirectory') ?? '').obs;
   final m3uDirectory = (HivePrefUtil.getString('m3uDirectory') ?? 'm3uDirectory').obs;
 
+  // ========== Debounce 辅助 ==========
+  final Map<String, Timer> _debounceTimers = {};
+
+  void _debounceWrite(String key, Future<void> Function() writeOp,
+      {Duration delay = const Duration(milliseconds: 500)}) {
+    _debounceTimers[key]?.cancel();
+    _debounceTimers[key] = Timer(delay, () async {
+      await writeOp();
+      _debounceTimers.remove(key);
+    });
+  }
+
   // ========== Getter 方法 ==========
   ThemeMode get themeMode => AppConsts.themeModes[themeModeName.value]!;
   Locale get language => AppConsts.languages[languageName.value]!;
@@ -147,13 +160,19 @@ class SettingsService extends GetxController {
   List<String> get resolutionsList => PlayerConsts.resolutions;
   List<BoxFit> get videofitArrary => PlayerConsts.videofitList;
   List<String> get playerlist => PlayerConsts.players;
-  MemoryImage? get cachedBackgroundImage {
+  FileImage? get cachedBackgroundFileImage {
     if (currentBoxImage.isEmpty) return null;
-    if (_cachedBase64 != currentBoxImage.value) {
-      _cachedBase64 = currentBoxImage.value;
-      _cachedBytes = base64Decode(currentBoxImage.value);
-    }
-    return _cachedBytes != null ? MemoryImage(_cachedBytes!) : null;
+    final path = currentBoxImage.value;
+    // If it looks like base64 (not yet migrated)
+    if (path.length > 500) return null;
+    // Cache hit: same path, already verified
+    if (_cachedImagePath == path) return _cachedFileImage;
+    // New path: verify file exists (only once per path change)
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    _cachedImagePath = path;
+    _cachedFileImage = FileImage(file);
+    return _cachedFileImage;
   }
 
   // ========== 数据迁移方法 ==========
@@ -202,6 +221,7 @@ class SettingsService extends GetxController {
 
     // 初始化变量监听
     _initVariableListeners();
+    _migrateBase64Wallpaper();
   }
 
   /// 初始化变量监听（异步写入 Hive）
@@ -219,33 +239,33 @@ class SettingsService extends GetxController {
       await HivePrefUtil.setBool('enableDenseFavorites', value);
     });
 
-    shieldList.listen((value) async {
-      await HivePrefUtil.setStringList('shieldList', value);
+    shieldList.listen((value) {
+      _debounceWrite('shieldList', () => HivePrefUtil.setStringList('shieldList', value));
     });
 
-    hotAreasList.listen((value) async {
-      await HivePrefUtil.setStringList('hotAreasList', value);
+    hotAreasList.listen((value) {
+      _debounceWrite('hotAreasList', () => HivePrefUtil.setStringList('hotAreasList', value));
     });
 
-    favoriteRooms.listen((rooms) async {
-      await HivePrefUtil.setStringList(
+    favoriteRooms.listen((rooms) {
+      _debounceWrite('favoriteRooms', () => HivePrefUtil.setStringList(
         'favoriteRooms',
         favoriteRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
-      );
+      ));
     });
 
-    favoriteAreas.listen((rooms) async {
-      await HivePrefUtil.setStringList(
+    favoriteAreas.listen((rooms) {
+      _debounceWrite('favoriteAreas', () => HivePrefUtil.setStringList(
         'favoriteAreas',
         favoriteAreas.map<String>((e) => jsonEncode(e.toJson())).toList(),
-      );
+      ));
     });
 
-    historyRooms.listen((rooms) async {
-      await HivePrefUtil.setStringList(
+    historyRooms.listen((rooms) {
+      _debounceWrite('historyRooms', () => HivePrefUtil.setStringList(
         'historyRooms',
         historyRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
-      );
+      ));
     });
 
     videoFitIndex.listen((value) async {
@@ -379,6 +399,18 @@ class SettingsService extends GetxController {
     });
   }
 
+  void _migrateBase64Wallpaper() async {
+    final value = currentBoxImage.value;
+    if (value.isEmpty || value.length < 500) return;
+    try {
+      final bytes = base64Decode(value);
+      final imageDir = await AppPathManager().getDir('WALLPAPER');
+      final file = File('${imageDir.path}${Platform.pathSeparator}bg.jpg');
+      await file.writeAsBytes(bytes);
+      currentBoxImage.value = file.path;
+    } catch (_) {}
+  }
+
   // ========== 配置修改方法 ==========
   void changeThemeMode(String mode) async {
     themeModeName.value = mode;
@@ -467,7 +499,7 @@ class SettingsService extends GetxController {
         finalImageUrl = url;
       }
 
-      // 5. Download image and convert to Base64
+      // 5. Download image and save to file
       if (finalImageUrl != null && finalImageUrl.isNotEmpty) {
         var response = await dio.get(
           finalImageUrl,
@@ -480,9 +512,15 @@ class SettingsService extends GetxController {
           ),
         );
 
-        String base64String = base64Encode(response.data);
-        if (base64String.length > 30) {
-          currentBoxImage.value = base64String;
+        if (response.data != null && response.data.length > 30) {
+          final imageDir = await AppPathManager().getDir('WALLPAPER');
+          final file = File('${imageDir.path}${Platform.pathSeparator}bg.jpg');
+          await file.writeAsBytes(response.data);
+
+          _cachedFileImage = null;
+          _cachedImagePath = null;
+
+          currentBoxImage.value = file.path;
         } else {
           ToastUtil.show("The image content is invalid.");
         }
@@ -763,6 +801,10 @@ class SettingsService extends GetxController {
   @override
   void onClose() {
     _stopWatchTimer.dispose();
+    for (final timer in _debounceTimers.values) {
+      timer.cancel();
+    }
+    _debounceTimers.clear();
     super.onClose();
   }
 }

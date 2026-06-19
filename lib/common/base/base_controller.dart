@@ -51,6 +51,7 @@ class BasePageController<T> extends BaseController {
   int count = 0;
   int maxPage = 0;
   int pageSize = 30;
+  int maxListSize = 200;
   var canLoadMore = false.obs;
   // 禁止到底部自动加载
   var stopLoadMore = true.obs;
@@ -123,6 +124,9 @@ class BasePageController<T> extends BaseController {
         list.value = result;
       } else {
         list.addAll(result);
+        if (list.length > maxListSize) {
+          list.value = list.sublist(list.length - maxListSize);
+        }
       }
     } catch (e) {
       handleError(e, showPageError: currentPage == 1);
