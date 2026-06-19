@@ -60,6 +60,8 @@ class AppPages {
       name: RoutePath.kLivePlay,
       page: () => LivePlayPage(),
       preventDuplicates: true,
+      transition: Transition.fade,
+      transitionDuration: const Duration(milliseconds: 200),
       bindings: [LivePlayBinding()],
     ),
     //账号设置
