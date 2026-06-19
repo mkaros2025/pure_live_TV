@@ -28,6 +28,8 @@ class AppInitializer {
   Future<void> initialize() async {
     if (_isInitialized) return;
     WidgetsFlutterBinding.ensureInitialized();
+    // 限制图片缓存为 20MB（适配 1GB 内存设备）
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 20 * 1024 * 1024;
     // 强制横屏
     SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeRight, DeviceOrientation.landscapeLeft]);
     // 全屏
@@ -38,7 +40,6 @@ class AppInitializer {
     String path = '${appDir.path}${Platform.pathSeparator}pure_live_Tv';
     await Hive.initFlutter(path);
     await HivePrefUtil.init();
-    MediaKit.ensureInitialized();
     await AppPathManager().initialize();
     await CustomImageCacheManager.initialize();
     initService();
