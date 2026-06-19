@@ -18,7 +18,7 @@ jobs:
       contents: write
     strategy:
       matrix:
-        branch: [main, without-exo]
+        branch: [main]
     
     steps:
       - name: 签出代码
