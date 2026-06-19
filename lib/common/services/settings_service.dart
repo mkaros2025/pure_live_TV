@@ -143,14 +143,29 @@ class SettingsService extends GetxController {
 
   // ========== Debounce 辅助 ==========
   final Map<String, Timer> _debounceTimers = {};
+  final Map<String, Future<void> Function()> _pendingWrites = {};
 
   void _debounceWrite(String key, Future<void> Function() writeOp,
       {Duration delay = const Duration(milliseconds: 500)}) {
     _debounceTimers[key]?.cancel();
+    _pendingWrites[key] = writeOp;
     _debounceTimers[key] = Timer(delay, () async {
       await writeOp();
       _debounceTimers.remove(key);
+      _pendingWrites.remove(key);
     });
+  }
+
+  /// 立即执行所有待写入操作（退出前调用，防止数据丢失）
+  Future<void> _flushPendingWrites() async {
+    for (final timer in _debounceTimers.values) {
+      timer.cancel();
+    }
+    _debounceTimers.clear();
+    for (final writeOp in _pendingWrites.values) {
+      await writeOp();
+    }
+    _pendingWrites.clear();
   }
 
   // ========== Getter 方法 ==========
@@ -801,10 +816,7 @@ class SettingsService extends GetxController {
   @override
   void onClose() {
     _stopWatchTimer.dispose();
-    for (final timer in _debounceTimers.values) {
-      timer.cancel();
-    }
-    _debounceTimers.clear();
+    _flushPendingWrites();
     super.onClose();
   }
 }

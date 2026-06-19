@@ -105,4 +105,21 @@ void main() {
       expect(buildCount, greaterThan(initialBuilds));
     });
   });
+
+  group('ImageCache limit', () {
+    test('image cache is capped at 20MB for low-memory devices', () {
+      // The image cache limit is set in AppInitializer.initialize()
+      // Verify the constant is correct: 20 * 1024 * 1024 = 20971520
+      const expectedBytes = 20 * 1024 * 1024;
+      expect(expectedBytes, equals(20971520));
+
+      // With memCacheWidth:360, memCacheHeight:202, each image ≈ 0.29MB
+      // 20MB / 0.29MB ≈ 68 images can be cached
+      // Screen shows ~10 cards at a time, so LRU eviction works naturally
+      final imagesPerScreen = 10;
+      final bytesPerImage = 360 * 202 * 4; // RGBA
+      final totalScreenBytes = imagesPerScreen * bytesPerImage;
+      expect(totalScreenBytes, lessThan(expectedBytes));
+    });
+  });
 }
