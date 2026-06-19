@@ -5,8 +5,7 @@ import 'package:pure_live/app/app_focus_node.dart';
 
 typedef FocusOnKeyDownCallback = KeyEventResult Function();
 
-/// 高亮组件
-class HighlightWidget extends StatelessWidget {
+class HighlightWidget extends StatefulWidget {
   final AppFocusNode focusNode;
   final Widget child;
   final FocusOnKeyDownCallback? onUpKey;
@@ -46,87 +45,56 @@ class HighlightWidget extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final settings = Get.find<SettingsService>();
-    var themeColor = HexColor(settings.themeColorSwitch.value);
-    int currentTimeStamp = 0;
-    int eventDirection = 0;
-    return useFocus
-        ? FocusTraversalOrder(
-            order: NumericFocusOrder(order),
-            child: Focus(
-              focusNode: focusNode,
-              autofocus: autofocus,
-              onFocusChange: onFocusChange,
-              onKeyEvent: (node, e) {
-                if (e is KeyUpEvent) {
-                  if (eventDirection == 0) return KeyEventResult.ignored;
-                  log('message: ${e.toString()} ${DateTime.now().millisecondsSinceEpoch - currentTimeStamp}');
-                  if (e.logicalKey == LogicalKeyboardKey.enter ||
-                      e.logicalKey == LogicalKeyboardKey.select ||
-                      e.logicalKey == LogicalKeyboardKey.space ||
-                      e.logicalKey == LogicalKeyboardKey.controlRight ||
-                      e.logicalKey == LogicalKeyboardKey.controlLeft) {
-                    eventDirection = 0;
-                    var now = DateTime.now().millisecondsSinceEpoch;
-                    if (now - currentTimeStamp > 500 && currentTimeStamp != 0) {
-                      currentTimeStamp = 0;
-                      return onLongTap?.call() ?? KeyEventResult.ignored;
-                    }
-                    onTap?.call();
-                    return KeyEventResult.ignored;
-                  }
-                }
-                if (e is KeyDownEvent) {
-                  if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
-                    return onRightKey?.call() ?? KeyEventResult.ignored;
-                  }
-                  if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
-                    return onLeftKey?.call() ?? KeyEventResult.ignored;
-                  }
-                  if (e.logicalKey == LogicalKeyboardKey.arrowUp) {
-                    return onUpKey?.call() ?? KeyEventResult.ignored;
-                  }
-                  if (e.logicalKey == LogicalKeyboardKey.arrowDown) {
-                    return onDownKey?.call() ?? KeyEventResult.ignored;
-                  }
-                  if (e.logicalKey == LogicalKeyboardKey.enter ||
-                      e.logicalKey == LogicalKeyboardKey.select ||
-                      e.logicalKey == LogicalKeyboardKey.space ||
-                      e.logicalKey == LogicalKeyboardKey.controlRight ||
-                      e.logicalKey == LogicalKeyboardKey.controlLeft) {
-                    currentTimeStamp = DateTime.now().millisecondsSinceEpoch;
-                    eventDirection = 1;
-                  }
-                }
+  State<HighlightWidget> createState() => _HighlightWidgetState();
+}
 
-                return KeyEventResult.ignored;
-              },
+class _HighlightWidgetState extends State<HighlightWidget> {
+  late final SettingsService _settings;
+  late Color _themeColor;
+  int _currentTimeStamp = 0;
+  int _eventDirection = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = Get.find<SettingsService>();
+    _themeColor = HexColor(_settings.themeColorSwitch.value);
+    _settings.themeColorSwitch.listen((value) {
+      if (mounted) {
+        setState(() {
+          _themeColor = HexColor(value);
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.useFocus
+        ? FocusTraversalOrder(
+            order: NumericFocusOrder(widget.order),
+            child: Focus(
+              focusNode: widget.focusNode,
+              autofocus: widget.autofocus,
+              onFocusChange: widget.onFocusChange,
+              onKeyEvent: _handleKeyEvent,
               child: GestureDetector(
-                onTap: onTap,
+                onTap: widget.onTap,
                 child: Obx(
                   () => AnimatedScale(
-                    scale: focusNode.isFoucsed.value ? 1.00 : 0.98,
+                    scale: widget.focusNode.isFoucsed.value ? 1.00 : 0.98,
                     duration: const Duration(milliseconds: 200),
-                    child: GestureDetector(
-                      onTap: onTap,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: borderRadius,
-                          boxShadow: focusNode.isFoucsed.value
-                              ? [
-                                  BoxShadow(
-                                    blurRadius: 6.w,
-                                    spreadRadius: 2.w,
-                                    color: themeColor,
-                                    //color: Color.fromARGB(255, 255, 120, 167),
-                                  ),
-                                ]
-                              : null,
-                          color: (focusNode.isFoucsed.value || selected) ? foucsedColor : color,
-                        ),
-                        child: child,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: widget.borderRadius,
+                        boxShadow: widget.focusNode.isFoucsed.value
+                            ? [BoxShadow(blurRadius: 3.w, spreadRadius: 1.w, color: _themeColor)]
+                            : null,
+                        color: (widget.focusNode.isFoucsed.value || widget.selected)
+                            ? widget.foucsedColor
+                            : widget.color,
                       ),
+                      child: widget.child,
                     ),
                   ),
                 ),
@@ -134,31 +102,65 @@ class HighlightWidget extends StatelessWidget {
             ),
           )
         : GestureDetector(
-            onTap: onTap,
+            onTap: widget.onTap,
             child: AnimatedScale(
-              scale: selected ? 1.00 : 0.98,
+              scale: widget.selected ? 1.00 : 0.98,
               duration: const Duration(milliseconds: 200),
-              child: GestureDetector(
-                onTap: onTap,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: borderRadius,
-                    boxShadow: selected
-                        ? [
-                            BoxShadow(
-                              blurRadius: 6.w,
-                              spreadRadius: 2.w,
-                              color: themeColor,
-                              //color: Color.fromARGB(255, 255, 120, 167),
-                            ),
-                          ]
-                        : null,
-                    color: selected ? foucsedColor : color,
-                  ),
-                  child: child,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: widget.borderRadius,
+                  boxShadow: widget.selected
+                      ? [BoxShadow(blurRadius: 3.w, spreadRadius: 1.w, color: _themeColor)]
+                      : null,
+                  color: widget.selected ? widget.foucsedColor : widget.color,
                 ),
+                child: widget.child,
               ),
             ),
           );
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent e) {
+    if (e is KeyUpEvent) {
+      if (_eventDirection == 0) return KeyEventResult.ignored;
+      log('message: ${e.toString()} ${DateTime.now().millisecondsSinceEpoch - _currentTimeStamp}');
+      if (e.logicalKey == LogicalKeyboardKey.enter ||
+          e.logicalKey == LogicalKeyboardKey.select ||
+          e.logicalKey == LogicalKeyboardKey.space ||
+          e.logicalKey == LogicalKeyboardKey.controlRight ||
+          e.logicalKey == LogicalKeyboardKey.controlLeft) {
+        _eventDirection = 0;
+        var now = DateTime.now().millisecondsSinceEpoch;
+        if (now - _currentTimeStamp > 500 && _currentTimeStamp != 0) {
+          _currentTimeStamp = 0;
+          return widget.onLongTap?.call() ?? KeyEventResult.ignored;
+        }
+        widget.onTap?.call();
+        return KeyEventResult.ignored;
+      }
+    }
+    if (e is KeyDownEvent) {
+      if (e.logicalKey == LogicalKeyboardKey.arrowRight) {
+        return widget.onRightKey?.call() ?? KeyEventResult.ignored;
+      }
+      if (e.logicalKey == LogicalKeyboardKey.arrowLeft) {
+        return widget.onLeftKey?.call() ?? KeyEventResult.ignored;
+      }
+      if (e.logicalKey == LogicalKeyboardKey.arrowUp) {
+        return widget.onUpKey?.call() ?? KeyEventResult.ignored;
+      }
+      if (e.logicalKey == LogicalKeyboardKey.arrowDown) {
+        return widget.onDownKey?.call() ?? KeyEventResult.ignored;
+      }
+      if (e.logicalKey == LogicalKeyboardKey.enter ||
+          e.logicalKey == LogicalKeyboardKey.select ||
+          e.logicalKey == LogicalKeyboardKey.space ||
+          e.logicalKey == LogicalKeyboardKey.controlRight ||
+          e.logicalKey == LogicalKeyboardKey.controlLeft) {
+        _currentTimeStamp = DateTime.now().millisecondsSinceEpoch;
+        _eventDirection = 1;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 }

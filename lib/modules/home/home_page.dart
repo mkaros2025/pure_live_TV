@@ -196,8 +196,6 @@ class HomePage extends GetView<HomeController> {
                     crossAxisCount: 5,
                     crossAxisSpacing: 24.w,
                     mainAxisSpacing: 20.w,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
                     itemBuilder: (_, i) {
                       var item = controller.rooms.value[i];
                       return RoomCard(
