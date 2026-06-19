@@ -7,6 +7,7 @@ import 'package:pure_live/common/index.dart';
 import 'package:pure_live/app/app_focus_node.dart';
 import 'package:pure_live/common/utils/version_util.dart';
 import 'package:pure_live/common/base/base_controller.dart';
+import 'package:pure_live/player/global_player_service.dart';
 import 'package:android_tv_text_field/native_textfield_tv.dart';
 
 class HomeController extends BasePageController {
@@ -59,9 +60,19 @@ class HomeController extends BasePageController {
         }),
       );
       checkNewVersion();
+      _prewarmPlayer();
     });
 
     super.onInit();
+  }
+
+  /// 首页渲染完成后预热播放器引擎，避免首次进入直播间时卡顿
+  void _prewarmPlayer() {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!Get.isRegistered<GlobalPlayerService>()) {
+        GlobalPlayerService.instance.initialize();
+      }
+    });
   }
 
   Future<void> checkNewVersion() async {
