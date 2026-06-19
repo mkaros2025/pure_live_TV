@@ -16,74 +16,117 @@ import 'package:pure_live/core/iptv/services/auto_sync_scheduler.dart';
 import 'package:pure_live/common/services/bilibili_account_service.dart';
 
 class SettingsService extends GetxController {
-  // ========== 实例变量 ==========
-  // 主题相关
-  final themeModeName = (HivePrefUtil.getString('themeMode') ?? "System").obs;
-  final themeColorSwitch = (HivePrefUtil.getString('themeColorSwitch') ?? Colors.red.hex).obs;
-  final enableDynamicTheme = (HivePrefUtil.getBool('enableDynamicTheme') ?? false).obs;
+  // ========== 懒加载基础设施 ==========
+  final Map<String, dynamic> _lazyRxCache = {};
+
+  /// 创建懒加载 Rx 变量：首次访问时从 Hive 读取，并自动注册写入监听
+  Rx<T> _lazy<T>(String key, T defaultValue, T? Function(String) readFn, {void Function(T)? onWrite}) {
+    return _lazyRxCache.putIfAbsent(key, () {
+      final T val = readFn(key) ?? defaultValue;
+      final rx = Rx<T>(val);
+      if (onWrite != null) {
+        rx.listen(onWrite);
+      }
+      return rx;
+    }) as Rx<T>;
+  }
+
+  // 懒加载 getter：首次访问 .value 时才读 Hive + 注册写入监听
+  Rx<String> get themeModeName => _lazy<String>('themeMode', "System", HivePrefUtil.getString);
+  Rx<String> get themeColorSwitch => _lazy<String>('themeColorSwitch', Colors.red.hex, HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('themeColorSwitch', v));
+  Rx<bool> get enableDynamicTheme => _lazy<bool>('enableDynamicTheme', false, HivePrefUtil.getBool,
+      onWrite: (v) { HivePrefUtil.setBool('enableDynamicTheme', v); update(['myapp']); });
+  Rx<String> get languageName => _lazy<String>('language', "简体中文", HivePrefUtil.getString);
+  Rx<int> get autoRefreshTime => _lazy<int>('autoRefreshTime', 3, HivePrefUtil.getInt);
+  Rx<int> get autoShutDownTime => _lazy<int>('autoShutDownTime', 120, HivePrefUtil.getInt);
+  Rx<bool> get enableAutoShutDownTime => _lazy<bool>('enableAutoShutDownTime', false, HivePrefUtil.getBool);
+  Rx<int> get lastRefreshTime => _lazy<int>('lastRefreshTime', 0, HivePrefUtil.getInt);
+  Rx<bool> get enableDenseFavorites => _lazy<bool>('enableDenseFavorites', false, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('enableDenseFavorites', v));
+  Rx<bool> get enableBackgroundPlay => _lazy<bool>('enableBackgroundPlay', false, HivePrefUtil.getBool);
+  Rx<bool> get enableScreenKeepOn => _lazy<bool>('enableScreenKeepOn', true, HivePrefUtil.getBool);
+  Rx<bool> get enableAutoCheckUpdate => _lazy<bool>('enableAutoCheckUpdate', true, HivePrefUtil.getBool);
+  Rx<bool> get enableFullScreenDefault => _lazy<bool>('enableFullScreenDefault', false, HivePrefUtil.getBool);
+  Rx<int> get maxConcurrentRefresh => _lazy<int>('maxConcurrentRefresh', 3, HivePrefUtil.getInt,
+      onWrite: (v) => HivePrefUtil.setInt('maxConcurrentRefresh', v));
+  Rx<bool> get autoRefreshFavorite => _lazy<bool>('autoRefreshFavorite', true, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('autoRefreshFavorite', v));
+  Rx<int> get autoRefreshInterval => _lazy<int>('autoRefreshInterval', 10, HivePrefUtil.getInt,
+      onWrite: (v) => HivePrefUtil.setInt('autoRefreshInterval', v));
+  Rx<bool> get isFirstInApp => _lazy<bool>('isFirstInApp', true, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('isFirstInApp', false));
+  Rx<int> get videoFitIndex => _lazy<int>('videoFitIndex', 0, HivePrefUtil.getInt,
+      onWrite: (v) => HivePrefUtil.setInt('videoFitIndex', v));
+  Rx<int> get videoPlayerIndex => _lazy<int>('videoPlayerIndex', 0, HivePrefUtil.getInt,
+      onWrite: (v) => HivePrefUtil.setInt('videoPlayerIndex', v));
+  Rx<bool> get useHardStopOnExit => _lazy<bool>('useHardStopOnExit', true, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('useHardStopOnExit', v));
+  Rx<bool> get enableCodec => _lazy<bool>('enableCodec', true, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('enableCodec', v));
+  Rx<double> get audioDelay => _lazy<double>('audioDelay', 0.0, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('audioDelay', v));
+  Rx<bool> get playerCompatMode => _lazy<bool>('playerCompatMode', false, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('playerCompatMode', v));
+  Rx<String> get preferResolution => _lazy<String>('preferResolution', PlayerConsts.resolutions[0], HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('preferResolution', v));
+  Rx<String> get preferPlatform => _lazy<String>('preferPlatform', AppConsts.platforms[0], HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('preferPlatform', v));
+  Rx<double> get volume => _lazy<double>('volume', 0.5, HivePrefUtil.getDouble);
+  Rx<bool> get customPlayerOutput => _lazy<bool>('customPlayerOutput', false, HivePrefUtil.getBool);
+  Rx<String> get videoOutputDriver => _lazy<String>('videoOutputDriver', "gpu", HivePrefUtil.getString);
+  Rx<String> get audioOutputDriver => _lazy<String>('audioOutputDriver', "auto", HivePrefUtil.getString);
+  Rx<String> get videoHardwareDecoder => _lazy<String>('videoHardwareDecoder', "auto", HivePrefUtil.getString);
+  Rx<bool> get hideDanmaku => _lazy<bool>('hideDanmaku', false, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('hideDanmaku', v));
+  Rx<double> get danmakuArea => _lazy<double>('danmakuArea', 1.0, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('danmakuArea', v));
+  Rx<double> get danmakuTopArea => _lazy<double>('danmakuTopArea', 0.0, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('danmakuTopArea', v));
+  Rx<double> get danmakuBottomArea => _lazy<double>('danmakuBottomArea', 0.5, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('danmakuBottomArea', v));
+  Rx<double> get danmakuSpeed => _lazy<double>('danmakuSpeed', 8.0, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('danmakuSpeed', v));
+  Rx<double> get danmakuFontSize => _lazy<double>('danmakuFontSize', 16.0, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('danmakuFontSize', v));
+  Rx<double> get danmakuFontBorder => _lazy<double>('danmakuFontBorder', 4.0, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('danmakuFontBorder', v));
+  Rx<double> get danmakuOpacity => _lazy<double>('danmakuOpacity', 1.0, HivePrefUtil.getDouble,
+      onWrite: (v) => HivePrefUtil.setDouble('danmakuOpacity', v));
+  Rx<String> get bilibiliCookie => _lazy<String>('bilibiliCookie', '', HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('bilibiliCookie', v));
+  Rx<String> get huyaCookie => _lazy<String>('huyaCookie', '', HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('huyaCookie', v));
+  Rx<String> get douyinCookie => _lazy<String>('douyinCookie', '', HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('douyinCookie', v));
+  Rx<String> get kuaishouCookie => _lazy<String>('kuaishouCookie', '', HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('kuaishouCookie', v));
+  Rx<bool> get dontAskExit => _lazy<bool>('dontAskExit', false, HivePrefUtil.getBool);
+  Rx<String> get exitChoose => _lazy<String>('exitChoose', '', HivePrefUtil.getString);
+  Rx<String> get webPort => _lazy<String>('webPort', "9527", HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('webPort', v));
+  Rx<String> get backupDirectory => _lazy<String>('backupDirectory', '', HivePrefUtil.getString);
+  Rx<String> get m3uDirectory => _lazy<String>('m3uDirectory', 'm3uDirectory', HivePrefUtil.getString);
+  Rx<String> get selectedSourceName => _lazy<String>('selectedSourceName', '', HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('selectedSourceName', v));
+  Rx<String> get selectedSourceId => _lazy<String>('selectedSourceId', '', HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('selectedSourceId', v));
+  Rx<bool> get isAutoSyncEnabled => _lazy<bool>('isAutoSyncEnabled', false, HivePrefUtil.getBool,
+      onWrite: (v) => HivePrefUtil.setBool('isAutoSyncEnabled', v));
+  Rx<int> get autoSyncHoursInterval => _lazy<int>('autoSyncHoursInterval', 24, HivePrefUtil.getInt,
+      onWrite: (v) => HivePrefUtil.setInt('autoSyncHoursInterval', v));
+  Rx<String> get customIptvUserAgent => _lazy<String>('customIptvUserAgent', '', HivePrefUtil.getString,
+      onWrite: (v) => HivePrefUtil.setString('customIptvUserAgent', v));
+
+  // ========== 以下变量保持直接初始化（需要变异方法或非 Hive 来源） ==========
   final Map<ColorSwatch<Object>, String> colorsNameMap = AppConsts.themeColors.map(
     (key, value) => MapEntry(ColorTools.createPrimarySwatch(value), key),
   );
-
-  // 语言相关
-  final languageName = (HivePrefUtil.getString('language') ?? "简体中文").obs;
-
-  // 定时器相关
   final StopWatchTimer _stopWatchTimer = StopWatchTimer(mode: StopWatchMode.countDown);
-  final autoRefreshTime = (HivePrefUtil.getInt('autoRefreshTime') ?? 3).obs;
-  final autoShutDownTime = (HivePrefUtil.getInt('autoShutDownTime') ?? 120).obs;
-  final enableAutoShutDownTime = (HivePrefUtil.getBool('enableAutoShutDownTime') ?? false).obs;
-  final lastRefreshTime = (HivePrefUtil.getInt('lastRefreshTime') ?? 0).obs;
 
-  // 界面与交互相关
-  final enableDenseFavorites = (HivePrefUtil.getBool('enableDenseFavorites') ?? false).obs;
-  final enableBackgroundPlay = (HivePrefUtil.getBool('enableBackgroundPlay') ?? false).obs;
-  final enableScreenKeepOn = (HivePrefUtil.getBool('enableScreenKeepOn') ?? true).obs;
-  final enableAutoCheckUpdate = (HivePrefUtil.getBool('enableAutoCheckUpdate') ?? true).obs;
-  final enableFullScreenDefault = (HivePrefUtil.getBool('enableFullScreenDefault') ?? false).obs;
-  final maxConcurrentRefresh = (HivePrefUtil.getInt('maxConcurrentRefresh') ?? 3).obs;
-  final autoRefreshFavorite = (HivePrefUtil.getBool('autoRefreshFavorite') ?? true).obs;
-  final autoRefreshInterval = (HivePrefUtil.getInt('autoRefreshInterval') ?? 10).obs;
-  final isFirstInApp = (HivePrefUtil.getBool('isFirstInApp') ?? true).obs;
-
-  // 播放器相关
-  final videoFitIndex = (HivePrefUtil.getInt('videoFitIndex') ?? 0).obs;
-  final videoPlayerIndex = (HivePrefUtil.getInt('videoPlayerIndex') ?? 0).obs;
-  final useHardStopOnExit = (HivePrefUtil.getBool('useHardStopOnExit') ?? true).obs;
-  final enableCodec = (HivePrefUtil.getBool('enableCodec') ?? true).obs;
-  final audioDelay = (HivePrefUtil.getDouble('audioDelay') ?? 0.0).obs;
-  final playerCompatMode = (HivePrefUtil.getBool('playerCompatMode') ?? false).obs;
-  final preferResolution = (HivePrefUtil.getString('preferResolution') ?? PlayerConsts.resolutions[0]).obs;
-  final preferPlatform = (HivePrefUtil.getString('preferPlatform') ?? AppConsts.platforms[0]).obs;
-  final volume = (HivePrefUtil.getDouble('volume') ?? 0.5).obs; // 补充原代码可能遗漏的变量
-  final customPlayerOutput = (HivePrefUtil.getBool('customPlayerOutput') ?? false).obs; // 补充
-  final videoOutputDriver = (HivePrefUtil.getString('videoOutputDriver') ?? "gpu").obs; // 补充
-  final audioOutputDriver = (HivePrefUtil.getString('audioOutputDriver') ?? "auto").obs; // 补充
-  final videoHardwareDecoder = (HivePrefUtil.getString('videoHardwareDecoder') ?? "auto").obs; // 补充
-
-  // 弹幕相关
-  final hideDanmaku = (HivePrefUtil.getBool('hideDanmaku') ?? false).obs;
-  final danmakuArea = (HivePrefUtil.getDouble('danmakuArea') ?? 1.0).obs;
-  final danmakuTopArea = (HivePrefUtil.getDouble('danmakuTopArea') ?? 0.0).obs;
-  final danmakuBottomArea = (HivePrefUtil.getDouble('danmakuBottomArea') ?? 0.5).obs;
-  final danmakuSpeed = (HivePrefUtil.getDouble('danmakuSpeed') ?? 8.0).obs;
-  final danmakuFontSize = (HivePrefUtil.getDouble('danmakuFontSize') ?? 16.0).obs;
-  final danmakuFontBorder = (HivePrefUtil.getDouble('danmakuFontBorder') ?? 4.0).obs;
-  final danmakuOpacity = (HivePrefUtil.getDouble('danmakuOpacity') ?? 1.0).obs;
-
-  // 账号与Cookie相关
-  final bilibiliCookie = (HivePrefUtil.getString('bilibiliCookie') ?? '').obs;
-  final huyaCookie = (HivePrefUtil.getString('huyaCookie') ?? '').obs;
-  final douyinCookie = (HivePrefUtil.getString('douyinCookie') ?? '').obs;
-  final kuaishouCookie = (HivePrefUtil.getString('kuaishouCookie') ?? '').obs;
-  final dontAskExit = (HivePrefUtil.getBool('dontAskExit') ?? false).obs; // 补充
-  final exitChoose = (HivePrefUtil.getString('exitChoose') ?? '').obs; // 补充
-
-  // 过滤与区域相关
+  // 列表类型（需要 .add() / []= 等变异方法）
   final shieldList = ((HivePrefUtil.getStringList('shieldList') ?? [])).obs;
   final hotAreasList = ((HivePrefUtil.getStringList('hotAreasList') ?? AppConsts.supportSites)).obs;
-
-  // 收藏与历史相关
   final favoriteRooms =
       ((HivePrefUtil.getStringList('favoriteRooms') ?? []).map((e) => LiveRoom.fromJson(jsonDecode(e))).toList()).obs;
   final historyRooms =
@@ -91,31 +134,19 @@ class SettingsService extends GetxController {
   final favoriteAreas =
       ((HivePrefUtil.getStringList('favoriteAreas') ?? []).map((e) => LiveArea.fromJson(jsonDecode(e))).toList()).obs;
 
-  // 播放列表相关
+  // 非 Hive 来源或需要立即响应的变量
   final currentPlayList = [].obs;
   final currentPlayListNodeIndex = 0.obs;
-
-  // 图片与界面定制相关
   final currentBoxImage = (HivePrefUtil.getString('currentBoxImage') ?? "").obs;
   final currentBoxImageIndex = (HivePrefUtil.getInt('currentBoxImageIndex') ?? 0).obs;
   final backgroundImageFitIndex = (HivePrefUtil.getInt('backgroundImageFitIndex') ?? 2).obs;
-  // ==============================
-  //  电视设置 (新增)
-  // ==============================
-  final selectedSourceName = (HivePrefUtil.getString('selectedSourceName') ?? '').obs;
-  final selectedSourceId = (HivePrefUtil.getString('selectedSourceId') ?? '').obs;
-  final isAutoSyncEnabled = (HivePrefUtil.getBool('isAutoSyncEnabled') ?? false).obs;
-  final autoSyncHoursInterval = (HivePrefUtil.getInt('autoSyncHoursInterval') ?? 24).obs;
-  final customIptvUserAgent = (HivePrefUtil.getString('customIptvUserAgent') ?? '').obs;
-  String? _cachedImagePath;
-  FileImage? _cachedFileImage;
-
-  // Web与网络相关
-  final webPort = (HivePrefUtil.getString('webPort') ?? "9527").obs;
   final webPortEnable = false.obs;
   final httpErrorMsg = ''.obs;
   final ScrollController scrollController = ScrollController();
-  // 焦点节点相关
+  final routeChangeType = RouteChangeType.push.obs;
+  final currentRouteName = ''.obs;
+
+  // 焦点节点
   final AppFocusNode maxConcurrentRefreshNode = AppFocusNode();
   final AppFocusNode autoRefreshTimeNode = AppFocusNode();
   final AppFocusNode backFocusNode = AppFocusNode();
@@ -133,13 +164,8 @@ class SettingsService extends GetxController {
   final AppFocusNode currentImageIndexNode = AppFocusNode();
   final AppFocusNode useHardStopOnExitNode = AppFocusNode();
 
-  // 路由相关
-  final routeChangeType = RouteChangeType.push.obs;
-  final currentRouteName = ''.obs;
-
-  // 备份与存储相关
-  final backupDirectory = (HivePrefUtil.getString('backupDirectory') ?? '').obs;
-  final m3uDirectory = (HivePrefUtil.getString('m3uDirectory') ?? 'm3uDirectory').obs;
+  String? _cachedImagePath;
+  FileImage? _cachedFileImage;
 
   // ========== Debounce 辅助 ==========
   final Map<String, Timer> _debounceTimers = {};
@@ -234,183 +260,45 @@ class SettingsService extends GetxController {
       update(['migrate_complete']);
     });
 
-    // 初始化变量监听
-    _initVariableListeners();
+    // 注册列表类型和特殊变量的写入监听（这些不是懒加载的）
+    _registerDirectFieldListeners();
     _migrateBase64Wallpaper();
   }
 
-  /// 初始化变量监听（异步写入 Hive）
-  void _initVariableListeners() {
-    enableDynamicTheme.listen((bool value) async {
-      await HivePrefUtil.setBool('enableDynamicTheme', value);
-      update(['myapp']);
-    });
-
-    themeColorSwitch.listen((value) async {
-      await HivePrefUtil.setString('themeColorSwitch', value);
-    });
-
-    enableDenseFavorites.listen((value) async {
-      await HivePrefUtil.setBool('enableDenseFavorites', value);
-    });
-
+  /// 注册直接字段（列表、特殊变量）的 Hive 写入监听
+  void _registerDirectFieldListeners() {
     shieldList.listen((value) {
       _debounceWrite('shieldList', () => HivePrefUtil.setStringList('shieldList', value));
     });
-
     hotAreasList.listen((value) {
       _debounceWrite('hotAreasList', () => HivePrefUtil.setStringList('hotAreasList', value));
     });
-
     favoriteRooms.listen((rooms) {
       _debounceWrite('favoriteRooms', () => HivePrefUtil.setStringList(
         'favoriteRooms',
         favoriteRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
       ));
     });
-
     favoriteAreas.listen((rooms) {
       _debounceWrite('favoriteAreas', () => HivePrefUtil.setStringList(
         'favoriteAreas',
         favoriteAreas.map<String>((e) => jsonEncode(e.toJson())).toList(),
       ));
     });
-
     historyRooms.listen((rooms) {
       _debounceWrite('historyRooms', () => HivePrefUtil.setStringList(
         'historyRooms',
         historyRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
       ));
     });
-
-    videoFitIndex.listen((value) async {
-      await HivePrefUtil.setInt('videoFitIndex', value);
+    currentBoxImage.listen((value) {
+      HivePrefUtil.setString('currentBoxImage', value);
     });
-
-    hideDanmaku.listen((value) async {
-      await HivePrefUtil.setBool('hideDanmaku', value);
+    currentBoxImageIndex.listen((value) {
+      HivePrefUtil.setInt('currentBoxImageIndex', value);
     });
-
-    danmakuArea.listen((value) async {
-      await HivePrefUtil.setDouble('danmakuArea', value);
-    });
-
-    danmakuTopArea.listen((value) async {
-      await HivePrefUtil.setDouble('danmakuTopArea', value);
-    });
-
-    danmakuBottomArea.listen((value) async {
-      await HivePrefUtil.setDouble('danmakuBottomArea', value);
-    });
-
-    danmakuSpeed.listen((value) async {
-      await HivePrefUtil.setDouble('danmakuSpeed', value);
-    });
-
-    danmakuFontSize.listen((value) async {
-      await HivePrefUtil.setDouble('danmakuFontSize', value);
-    });
-
-    danmakuFontBorder.listen((value) async {
-      await HivePrefUtil.setDouble('danmakuFontBorder', value);
-    });
-
-    danmakuOpacity.listen((value) async {
-      await HivePrefUtil.setDouble('danmakuOpacity', value);
-    });
-
-    enableCodec.listen((value) async {
-      await HivePrefUtil.setBool('enableCodec', value);
-    });
-
-    audioDelay.listen((value) async {
-      await HivePrefUtil.setDouble('audioDelay', value);
-    });
-
-    videoPlayerIndex.listen((value) async {
-      await HivePrefUtil.setInt('videoPlayerIndex', value);
-    });
-    useHardStopOnExit.listen((value) {
-      HivePrefUtil.setBool('useHardStopOnExit', value);
-    });
-
-    bilibiliCookie.listen((value) async {
-      await HivePrefUtil.setString('bilibiliCookie', value);
-    });
-
-    huyaCookie.listen((value) async {
-      await HivePrefUtil.setString('huyaCookie', value);
-    });
-
-    douyinCookie.listen((value) async {
-      await HivePrefUtil.setString('douyinCookie', value);
-    });
-    kuaishouCookie.listen((value) {
-      HivePrefUtil.setString('kuaishouCookie', value);
-    });
-    webPort.listen((value) async {
-      await HivePrefUtil.setString('webPort', value);
-    });
-
-    isFirstInApp.listen((value) async {
-      await HivePrefUtil.setBool('isFirstInApp', false);
-    });
-
-    currentBoxImage.listen((value) async {
-      await HivePrefUtil.setString('currentBoxImage', value);
-    });
-
-    currentBoxImageIndex.listen((value) async {
-      await HivePrefUtil.setInt('currentBoxImageIndex', value);
-    });
-
-    backgroundImageFitIndex.listen((value) async {
-      await HivePrefUtil.setInt('backgroundImageFitIndex', value);
-    });
-
-    playerCompatMode.listen((value) async {
-      await HivePrefUtil.setBool('playerCompatMode', value);
-    });
-
-    preferResolution.listen((value) async {
-      await HivePrefUtil.setString('preferResolution', value);
-    });
-
-    preferPlatform.listen((value) async {
-      await HivePrefUtil.setString('preferPlatform', value);
-    });
-
-    maxConcurrentRefresh.listen((value) async {
-      await HivePrefUtil.setInt('maxConcurrentRefresh', value);
-    });
-
-    autoRefreshFavorite.listen((value) async {
-      await HivePrefUtil.setBool('autoRefreshFavorite', value);
-    });
-
-    autoRefreshInterval.listen((value) async {
-      await HivePrefUtil.setInt('autoRefreshInterval', value);
-    });
-
-    lastRefreshTime.listen((value) async {
-      await HivePrefUtil.setInt('lastRefreshTime', value);
-    });
-
-    selectedSourceName.listen((value) {
-      HivePrefUtil.setString('selectedSourceName', value);
-    });
-
-    selectedSourceId.listen((value) {
-      HivePrefUtil.setString('selectedSourceId', value);
-    });
-    isAutoSyncEnabled.listen((value) {
-      HivePrefUtil.setBool('isAutoSyncEnabled', value);
-    });
-    autoSyncHoursInterval.listen((value) {
-      HivePrefUtil.setInt('autoSyncHoursInterval', value);
-    });
-    customIptvUserAgent.listen((value) async {
-      await HivePrefUtil.setString('customIptvUserAgent', value);
+    backgroundImageFitIndex.listen((value) {
+      HivePrefUtil.setInt('backgroundImageFitIndex', value);
     });
   }
 
