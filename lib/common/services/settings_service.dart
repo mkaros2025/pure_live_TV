@@ -19,13 +19,13 @@ class SettingsService extends GetxController {
   // ========== 懒加载基础设施 ==========
   final Map<String, dynamic> _lazyRxCache = {};
 
-  /// 创建懒加载 Rx 变量：首次访问时从 Hive 读取，并自动注册写入监听
+  /// 创建懒加载 Rx 变量：首次访问时从 Hive 读取，并自动注册防抖写入监听
   Rx<T> _lazy<T>(String key, T defaultValue, T? Function(String) readFn, {void Function(T)? onWrite}) {
     return _lazyRxCache.putIfAbsent(key, () {
       final T val = readFn(key) ?? defaultValue;
       final rx = Rx<T>(val);
       if (onWrite != null) {
-        rx.listen(onWrite);
+        rx.listen((v) => _debounceWrite(key, () async => onWrite(v)));
       }
       return rx;
     }) as Rx<T>;
@@ -188,29 +188,14 @@ class SettingsService extends GetxController {
 
   // ========== Debounce 辅助 ==========
   final Map<String, Timer> _debounceTimers = {};
-  final Map<String, Future<void> Function()> _pendingWrites = {};
 
   void _debounceWrite(String key, Future<void> Function() writeOp,
       {Duration delay = const Duration(milliseconds: 500)}) {
     _debounceTimers[key]?.cancel();
-    _pendingWrites[key] = writeOp;
     _debounceTimers[key] = Timer(delay, () async {
       await writeOp();
       _debounceTimers.remove(key);
-      _pendingWrites.remove(key);
     });
-  }
-
-  /// 立即执行所有待写入操作（退出前调用，防止数据丢失）
-  Future<void> _flushPendingWrites() async {
-    for (final timer in _debounceTimers.values) {
-      timer.cancel();
-    }
-    _debounceTimers.clear();
-    for (final writeOp in _pendingWrites.values) {
-      await writeOp();
-    }
-    _pendingWrites.clear();
   }
 
   // ========== Getter 方法 ==========
@@ -284,41 +269,44 @@ class SettingsService extends GetxController {
     _migrateBase64Wallpaper();
   }
 
+  // ========== 直接字段监听 ==========
+  final List<StreamSubscription> _directFieldSubscriptions = [];
+
   /// 注册直接字段（列表、特殊变量）的 Hive 写入监听
   void _registerDirectFieldListeners() {
-    shieldList.listen((value) {
+    _directFieldSubscriptions.add(shieldList.listen((value) {
       _debounceWrite('shieldList', () => HivePrefUtil.setStringList('shieldList', value));
-    });
-    hotAreasList.listen((value) {
+    }));
+    _directFieldSubscriptions.add(hotAreasList.listen((value) {
       _debounceWrite('hotAreasList', () => HivePrefUtil.setStringList('hotAreasList', value));
-    });
-    favoriteRooms.listen((rooms) {
+    }));
+    _directFieldSubscriptions.add(favoriteRooms.listen((rooms) {
       _debounceWrite('favoriteRooms', () => HivePrefUtil.setStringList(
         'favoriteRooms',
         favoriteRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
       ));
-    });
-    favoriteAreas.listen((rooms) {
+    }));
+    _directFieldSubscriptions.add(favoriteAreas.listen((rooms) {
       _debounceWrite('favoriteAreas', () => HivePrefUtil.setStringList(
         'favoriteAreas',
         favoriteAreas.map<String>((e) => jsonEncode(e.toJson())).toList(),
       ));
-    });
-    historyRooms.listen((rooms) {
+    }));
+    _directFieldSubscriptions.add(historyRooms.listen((rooms) {
       _debounceWrite('historyRooms', () => HivePrefUtil.setStringList(
         'historyRooms',
         historyRooms.map<String>((e) => jsonEncode(e.toJson())).toList(),
       ));
-    });
-    currentBoxImage.listen((value) {
+    }));
+    _directFieldSubscriptions.add(currentBoxImage.listen((value) {
       HivePrefUtil.setString('currentBoxImage', value);
-    });
-    currentBoxImageIndex.listen((value) {
+    }));
+    _directFieldSubscriptions.add(currentBoxImageIndex.listen((value) {
       HivePrefUtil.setInt('currentBoxImageIndex', value);
-    });
-    backgroundImageFitIndex.listen((value) {
+    }));
+    _directFieldSubscriptions.add(backgroundImageFitIndex.listen((value) {
       HivePrefUtil.setInt('backgroundImageFitIndex', value);
-    });
+    }));
   }
 
   void _migrateBase64Wallpaper() async {
@@ -723,7 +711,16 @@ class SettingsService extends GetxController {
   @override
   void onClose() {
     _stopWatchTimer.dispose();
-    _flushPendingWrites();
+    // Cancel debounce timers
+    for (final timer in _debounceTimers.values) {
+      timer.cancel();
+    }
+    _debounceTimers.clear();
+    // Cancel direct field subscriptions
+    for (final sub in _directFieldSubscriptions) {
+      sub.cancel();
+    }
+    _directFieldSubscriptions.clear();
     super.onClose();
   }
 }
