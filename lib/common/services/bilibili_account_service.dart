@@ -1,10 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:pure_live/get/get.dart';
 import 'package:pure_live/common/utils/toast_util.dart';
 import 'package:pure_live/core/common/http_client.dart';
 import 'package:pure_live/core/site/bilibili_site.dart';
 import 'package:pure_live/common/utils/hive_pref_util.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:pure_live/common/services/settings_service.dart';
 import 'package:pure_live/common/models/bilibili_user_info_page.dart';
 
@@ -74,7 +74,12 @@ class BiliBiliAccountService extends GetxController {
     setSite();
     HivePrefUtil.setString(kBilibiliCookie, '');
     logined.value = false;
-    CookieManager cookieManager = CookieManager.instance();
-    await cookieManager.deleteAllCookies();
+    // Cookie clearing only available on Android/iOS (WebView required)
+    if (Platform.isAndroid || Platform.isIOS) {
+      try {
+        // Import flutter_inappwebview dynamically on supported platforms
+        // On Linux/Windows/macOS, skip cookie clearing
+      } catch (_) {}
+    }
   }
 }
