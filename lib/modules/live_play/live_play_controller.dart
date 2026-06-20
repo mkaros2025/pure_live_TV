@@ -278,11 +278,12 @@ class LivePlayController extends StateController {
 
   Future<void> disPoserPlayer() async {
     try {
-      // 优先停止弹幕，避免新实例创建前旧实例仍在运行
       liveDanmaku.stop();
-      liveDanmaku.onMessage = null; // 清空回调，防止内存泄漏
+      liveDanmaku.onMessage = null;
       liveDanmaku.onClose = null;
       liveDanmaku.onReady = null;
+
+      channelTimer?.cancel();
 
       if (videoController != null) {
         videoController?.dispose();
