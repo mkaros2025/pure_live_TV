@@ -36,6 +36,7 @@ class HomeController extends BasePageController {
   final syncNode = AppFocusNode();
   final pageController = GroupButtonController(selectedIndex: 0);
   var refreshIsOk = true.obs;
+  final List<StreamSubscription> _subscriptions = [];
   @override
   void onInit() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -43,20 +44,34 @@ class HomeController extends BasePageController {
       focusNodeListener();
       hisToryFocusNodes = List.generate(rooms.length, (_) => AppFocusNode());
       refreshData();
-      focusNodes[1].isFoucsed.listen((p0) {
-        listScrollController.animateTo(0.0, duration: const Duration(milliseconds: 200), curve: Curves.linear);
-      });
-      focusNodes[mainPageOptions.length].isFoucsed.listen((p0) {
-        listScrollController.animateTo(
-          listScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.linear,
-        );
-      });
+      _subscriptions.add(
+        focusNodes[1].isFoucsed.listen((p0) {
+          listScrollController.animateTo(0.0, duration: const Duration(milliseconds: 200), curve: Curves.linear);
+        }),
+      );
+      _subscriptions.add(
+        focusNodes[mainPageOptions.length].isFoucsed.listen((p0) {
+          listScrollController.animateTo(
+            listScrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.linear,
+          );
+        }),
+      );
       checkNewVersion();
+      _prewarmPlayer();
     });
 
     super.onInit();
+  }
+
+  /// 首页渲染完成后预热播放器引擎，避免首次进入直播间时卡顿
+  void _prewarmPlayer() {
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!Get.isRegistered<GlobalPlayerService>()) {
+        GlobalPlayerService.instance.initialize();
+      }
+    });
   }
 
   Future<void> checkNewVersion() async {
@@ -128,6 +143,10 @@ class HomeController extends BasePageController {
   void onClose() {
     _timer?.cancel();
     _timer = null;
+    for (final sub in _subscriptions) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
     super.onClose();
   }
 }

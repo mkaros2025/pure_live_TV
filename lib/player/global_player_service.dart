@@ -1,4 +1,5 @@
 import 'dart:developer';
+import 'package:media_kit/media_kit.dart';
 import 'core/player_pool.dart';
 import 'core/player_manager.dart';
 import 'models/player_engine.dart';
@@ -21,6 +22,9 @@ class GlobalPlayerService {
 
   Future<void> initialize({PlayerEngine defaultEngine = PlayerEngine.mediaKit}) async {
     if (_initialized) return;
+
+    // Lazy load media_kit native libraries (deferred from app startup)
+    MediaKit.ensureInitialized();
 
     // 1. Setup the Pool with a factory that knows how to create each Adapter
     final playerPool = PlayerPool(
