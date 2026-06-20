@@ -60,6 +60,7 @@ class BasePageController<T> extends BaseController {
   var list = <T>[].obs;
 
   var _currentTimeStamp = 0;
+  int _loadGeneration = 0;
 
   @override
   void onInit() {
@@ -75,8 +76,10 @@ class BasePageController<T> extends BaseController {
   }
 
   Future refreshData() async {
+    _loadGeneration++;
     currentPage = 1;
     list.value = [];
+    loadding.value = false;
     await loadData();
   }
 
@@ -98,6 +101,7 @@ class BasePageController<T> extends BaseController {
   }
 
   Future loadData() async {
+    final generation = _loadGeneration;
     try {
       if (loadding.value) return;
       loadding.value = true;
@@ -107,7 +111,10 @@ class BasePageController<T> extends BaseController {
       pageLoadding.value = currentPage == 1;
 
       var result = await getData(currentPage, pageSize);
-      //是否可以加载更多
+
+      // Stale result — another refreshData() was called
+      if (generation != _loadGeneration) return;
+
       if (result.isNotEmpty) {
         currentPage++;
         canLoadMore.value = true;
@@ -118,17 +125,20 @@ class BasePageController<T> extends BaseController {
           pageEmpty.value = true;
         }
       }
-      // 赋值数据
       if (currentPage == 1) {
         list.value = result;
       } else {
         list.addAll(result);
       }
     } catch (e) {
+      if (generation != _loadGeneration) return;
       handleError(e, showPageError: currentPage == 1);
     } finally {
-      loadding.value = false;
-      pageLoadding.value = false;
+      // Only reset loading if this is still the current generation
+      if (generation == _loadGeneration) {
+        loadding.value = false;
+        pageLoadding.value = false;
+      }
     }
   }
 

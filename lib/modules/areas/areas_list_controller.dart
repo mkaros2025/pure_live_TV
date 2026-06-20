@@ -33,9 +33,12 @@ class AreasListController extends BasePageController<AppLiveCategory> {
   }
 
   void setSite(String id) {
+    if (id == siteId.value) return;
+    final available = Sites().availableSites();
+    final pIndex = available.indexWhere((e) => e.id == id);
+    if (pIndex == -1) return;
     siteId.value = id;
-    final pIndex = Sites().availableSites().indexWhere((e) => e.id == id);
-    site = Sites().availableSites()[pIndex];
+    site = available[pIndex];
     refreshData();
   }
 
