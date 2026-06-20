@@ -103,7 +103,12 @@ class FavoriteController extends GetxController {
               room.platform!,
             ).liveSite.getRoomDetail(roomId: room.roomId!, platform: room.platform!);
 
-            settings.updateRoom(liveRoom);
+            // Mutate in-place; debounce coalesces the Hive writes
+            int idx = settings.favoriteRooms.indexWhere((r) => r.roomId == room.roomId);
+            if (idx != -1) {
+              settings.favoriteRooms[idx] = liveRoom;
+            }
+            settings.updateRoomInHistory(liveRoom);
           } catch (e, stack) {
             debugPrint('================ 刷新失败记录 ================');
             debugPrint('平台 (Platform): ${room.platform}');
@@ -117,12 +122,12 @@ class FavoriteController extends GetxController {
         });
       }).toList();
 
-      //  并发启动所有任务并等待它们全部执行完毕
       await Future.wait(tasks);
     } catch (e) {
       debugPrint('刷新过程中发生全局错误: $e');
     } finally {
-      // 4. 数据同步和状态重置
+      // Single notification after all updates
+      settings.favoriteRooms.refresh();
       syncRooms();
       isFirstLoad = false;
       loading.value = false;
